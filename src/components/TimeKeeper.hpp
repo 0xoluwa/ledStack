@@ -1,5 +1,5 @@
 #pragma once
-
+#include <driver/rtc_io.h>
 #include <esp32/ulp.h>
 #include <esp_sleep.h>
 #include "Types.hpp"
@@ -13,12 +13,9 @@ public:
     PowerStatus getPowerStatus();
     void enterDeepSleep();
     bool wasWokenByULP();
-    
+
 private:
-    void initADC();
     void configureWakeup();
-    void syncTimeFromULP();
-    void syncTimeToULP();
 };
 
 extern RTC_DATA_ATTR uint32_t ulp_seconds;

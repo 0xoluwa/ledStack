@@ -17,15 +17,31 @@ void WebServerManager::begin() {
     server->on("/control", [this]() { handleUserControl(); });
     server->on("/admin", [this]() { handleAdmin(); });
 
-    // API endpoints
-    server->on("/api/header/text", HTTP_POST, [this]() { apiSetHeaderText(); });
-    server->on("/api/header/color", HTTP_POST, [this]() { apiSetHeaderColor(); });
-    server->on("/api/time/color", HTTP_POST, [this]() { apiSetTimeColor(); });
-    server->on("/api/bg/color", HTTP_POST, [this]() { apiSetBgColor(); });
-    server->on("/api/brightness", HTTP_POST, [this]() { apiSetBrightness(); });
-    server->on("/api/power", HTTP_POST, [this]() { apiSetDisplayPower(); });
-    server->on("/api/time/sync", HTTP_POST, [this]() { apiSyncTime(); });
-    server->on("/api/wifi", HTTP_POST, [this]() { apiUpdateWiFiCredentials(); });
+    // API endpoints - using uri() and method() to match routes with query params
+    server->on("/api/header/text", [this]() {
+        if (server->method() == HTTP_POST) apiSetHeaderText();
+    });
+    server->on("/api/header/color", [this]() {
+        if (server->method() == HTTP_POST) apiSetHeaderColor();
+    });
+    server->on("/api/time/color", [this]() {
+        if (server->method() == HTTP_POST) apiSetTimeColor();
+    });
+    server->on("/api/bg/color", [this]() {
+        if (server->method() == HTTP_POST) apiSetBgColor();
+    });
+    server->on("/api/brightness", [this]() {
+        if (server->method() == HTTP_POST) apiSetBrightness();
+    });
+    server->on("/api/power", [this]() {
+        if (server->method() == HTTP_POST) apiSetDisplayPower();
+    });
+    server->on("/api/time/sync", [this]() {
+        if (server->method() == HTTP_POST) apiSyncTime();
+    });
+    server->on("/api/wifi", [this]() {
+        if (server->method() == HTTP_POST) apiUpdateWiFiCredentials();
+    });
 
     server->onNotFound([this]() { handleNotFound(); });
 
@@ -82,16 +98,28 @@ void WebServerManager::handleAdmin() {
 }
 
 void WebServerManager::handleNotFound() {
+    String uri = server->uri();
+    Serial.printf("WebServer: 404 Not Found - URI: %s, Method: %s\n",
+                  uri.c_str(),
+                  server->method() == HTTP_GET ? "GET" : "POST");
+    Serial.printf("WebServer: Args count: %d\n", server->args());
+    for (int i = 0; i < server->args(); i++) {
+        Serial.printf("  Arg %d: %s = %s\n", i, server->argName(i).c_str(), server->arg(i).c_str());
+    }
     server->send(404, "text/plain", "404: Not Found");
 }
 
 void WebServerManager::apiSetHeaderText() {
+    Serial.println("WebServer: apiSetHeaderText called");
+
     if (!authenticate()) {
+        Serial.println("WebServer: Authentication failed");
         return;
     }
 
     if (server->hasArg("text")) {
         String text = server->arg("text");
+        Serial.printf("WebServer: Received text='%s'\n", text.c_str());
 
         if (displayControlCallback) {
             LED_PANEL_REQUEST req;
@@ -99,29 +127,42 @@ void WebServerManager::apiSetHeaderText() {
             strncpy(req.data.text, text.c_str(), sizeof(req.data.text) - 1);
             req.data.text[sizeof(req.data.text) - 1] = '\0';
             displayControlCallback(req);
+            Serial.println("WebServer: Request sent to display");
+        } else {
+            Serial.println("WebServer: ERROR - displayControlCallback is NULL");
         }
 
         server->send(200, "application/json", "{\"status\":\"ok\"}");
     } else {
+        Serial.println("WebServer: ERROR - missing 'text' parameter");
         server->send(400, "application/json", "{\"status\":\"error\",\"message\":\"missing text\"}");
     }
 }
 
 void WebServerManager::apiSetHeaderColor() {
+    Serial.println("WebServer: apiSetHeaderColor called");
+
     if (!authenticate()) {
+        Serial.println("WebServer: Authentication failed");
         return;
     }
 
     if (server->hasArg("color")) {
+        String colorStr = server->arg("color");
+        Serial.printf("WebServer: Received color='%s'\n", colorStr.c_str());
+
         if (displayControlCallback) {
             LED_PANEL_REQUEST req;
             req.action = SET_HEADER_COL;
-            req.data.color = strtoul(server->arg("color").c_str(), nullptr, 16);
+            req.data.color = strtoul(colorStr.c_str(), nullptr, 16);
+            Serial.printf("WebServer: Parsed color=0x%06X\n", req.data.color);
             displayControlCallback(req);
+            Serial.println("WebServer: Request sent to display");
         }
 
         server->send(200, "application/json", "{\"status\":\"ok\"}");
     } else {
+        Serial.println("WebServer: ERROR - missing 'color' parameter");
         server->send(400, "application/json", "{\"status\":\"error\",\"message\":\"missing color\"}");
     }
 }
@@ -165,20 +206,28 @@ void WebServerManager::apiSetBgColor() {
 }
 
 void WebServerManager::apiSetBrightness() {
+    Serial.println("WebServer: apiSetBrightness called");
+
     if (!authenticate()) {
+        Serial.println("WebServer: Authentication failed");
         return;
     }
 
     if (server->hasArg("brightness")) {
+        int brightness = server->arg("brightness").toInt();
+        Serial.printf("WebServer: Received brightness=%d\n", brightness);
+
         if (displayControlCallback) {
             LED_PANEL_REQUEST req;
             req.action = SET_LED_BRIGHT;
-            req.data.brightness = server->arg("brightness").toInt();
+            req.data.brightness = brightness;
             displayControlCallback(req);
+            Serial.println("WebServer: Request sent to display");
         }
 
         server->send(200, "application/json", "{\"status\":\"ok\"}");
     } else {
+        Serial.println("WebServer: ERROR - missing 'brightness' parameter");
         server->send(400, "application/json", "{\"status\":\"error\",\"message\":\"missing brightness\"}");
     }
 }
@@ -336,37 +385,37 @@ String WebServerManager::generateUserControlPage() {
     </div>
     <h1>ledStack Display Control</h1>
 
-    <div class="control-group">
+    <div class='control-group'>
         <h3>Display Power</h3>
-        <button onclick="setPower('on')\">Turn ON</button>
-        <button onclick="setPower('off')\">Turn OFF</button>
+        <button onclick='setPower("on")'>Turn ON</button>
+        <button onclick='setPower("off")'>Turn OFF</button>
     </div>
 
-    <div class="control-group">
+    <div class='control-group'>
         <h3>Header Text</h3>
-        <input type="text" id="headerText" placeholder="Enter header text">
-        <button onclick="setHeaderText()\">Update Header</button>
+        <input type='text' id='headerText' placeholder='Enter header text'>
+        <button onclick='setHeaderText()'>Update Header</button>
     </div>
 
-    <div class="control-group">
+    <div class='control-group'>
         <h3>Colors</h3>
         <label>Header Color:</label>
-        <input type="color" id="headerColor" value="#0000ff">
-        <button onclick="setHeaderColor()\">Update</button>
+        <input type='color' id='headerColor' value='#0000ff'>
+        <button onclick='setHeaderColor()'>Update</button>
 
         <label>Time Color:</label>
-        <input type="color" id="timeColor" value="#ffffff">
-        <button onclick="setTimeColor()\">Update</button>
+        <input type='color' id='timeColor' value='#ffffff'>
+        <button onclick='setTimeColor()'>Update</button>
 
         <label>Background Color:</label>
-        <input type="color" id="bgColor" value="#000000">
-        <button onclick="setBgColor()\">Update</button>
+        <input type='color' id='bgColor' value='#000000'>
+        <button onclick='setBgColor()'>Update</button>
     </div>
 
-    <div class="control-group">
+    <div class='control-group'>
         <h3>Brightness</h3>
-        <input type="number" id="brightness" min="0" max="255" value="255">
-        <button onclick="setBrightness()\">Update</button>
+        <input type='number' id='brightness' min='0' max='255' value='255'>
+        <button onclick='setBrightness()'>Update</button>
     </div>
 
     <div id="status" class="status"></div>

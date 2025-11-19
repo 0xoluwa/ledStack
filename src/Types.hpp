@@ -2,8 +2,8 @@
 #include <Arduino.h>
 
 enum PowerStatus {
-    MAIN_POWER,
-    BATTERY_POWER
+    BATTERY_POWER = 0,  // GPIO LOW = battery
+    MAIN_POWER = 1      // GPIO HIGH = main power
 };
 
 struct TimeData {

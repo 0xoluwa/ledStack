@@ -18,6 +18,7 @@ SettingsStorage settingsStorage;
 
 // FreeRTOS queues and semaphores
 QueueHandle_t displayQueue;
+QueueHandle_t storageQueue;
 SemaphoreHandle_t nvsMutex;
 
 // Display state
@@ -27,13 +28,13 @@ bool displayPowerOn = true;
 TaskHandle_t displayTaskHandle = NULL;
 TaskHandle_t webServerTaskHandle = NULL;
 TaskHandle_t timeUpdateTaskHandle = NULL;
+TaskHandle_t storageTaskHandle = NULL;
 
-// Task: Display rendering and LVGL updates
+
 void displayTask(void* parameter) {
-    const TickType_t xDelay = pdMS_TO_TICKS(10); // 10ms tick for LVGL
+    const TickType_t xDelay = pdMS_TO_TICKS(10); 
 
     while (true) {
-        // Handle display requests from queue
         LED_PANEL_REQUEST req;
         if (xQueueReceive(displayQueue, &req, 0) == pdTRUE) {
             displayManager.handleRequest(req);
@@ -49,32 +50,9 @@ void displayTask(void* parameter) {
                              req.data.timeData.second);
             }
 
-            // Save to NVS based on action
-            if (xSemaphoreTake(nvsMutex, portMAX_DELAY) == pdTRUE) {
-                switch (req.action) {
-                    case SET_HEADER_T:
-                        settingsStorage.saveHeaderText(req.data.text);
-                        break;
-                    case SET_HEADER_COL:
-                        settingsStorage.saveHeaderColor(req.data.color);
-                        break;
-                    case SET_TIME_COL:
-                        settingsStorage.saveTimeColor(req.data.color);
-                        break;
-                    case SET_BG_COL:
-                        settingsStorage.saveBgColor(req.data.color);
-                        break;
-                    case SET_LED_BRIGHT:
-                        settingsStorage.saveBrightness(req.data.brightness);
-                        break;
-                    default:
-                        break;
-                }
-                xSemaphoreGive(nvsMutex);
-            }
+            xQueueSend(storageQueue, &req, 0); 
         }
 
-        // Update LVGL
         displayManager.update();
         displayManager.lvglTick();
 
@@ -82,9 +60,47 @@ void displayTask(void* parameter) {
     }
 }
 
-// Task: WebServer client handling
+void storageTask(void* parameter) {
+    const TickType_t xDelay = pdMS_TO_TICKS(1000);
+
+    while (true) {
+        LED_PANEL_REQUEST req;
+
+        if (xQueueReceive(storageQueue, &req, 0) == pdTRUE) {
+            if (xSemaphoreTake(nvsMutex, portMAX_DELAY) == pdTRUE) {
+                switch (req.action) {
+                    case SET_HEADER_T:
+                        settingsStorage.saveHeaderText(req.data.text);
+                        Serial.println("Storage: Saved header text");
+                        break;
+                    case SET_HEADER_COL:
+                        settingsStorage.saveHeaderColor(req.data.color);
+                        Serial.println("Storage: Saved header color");
+                        break;
+                    case SET_TIME_COL:
+                        settingsStorage.saveTimeColor(req.data.color);
+                        Serial.println("Storage: Saved time color");
+                        break;
+                    case SET_BG_COL:
+                        settingsStorage.saveBgColor(req.data.color);
+                        Serial.println("Storage: Saved background color");
+                        break;
+                    case SET_LED_BRIGHT:
+                        settingsStorage.saveBrightness(req.data.brightness);
+                        Serial.println("Storage: Saved brightness");
+                        break;
+                    default:
+                        break;
+                }
+                xSemaphoreGive(nvsMutex);
+            }
+        }
+        vTaskDelay(xDelay);
+    }
+}
+
 void webServerTask(void* parameter) {
-    const TickType_t xDelay = pdMS_TO_TICKS(2); // Fast response
+    const TickType_t xDelay = pdMS_TO_TICKS(2); 
 
     while (true) {
         webServer.handleClient();
@@ -92,19 +108,37 @@ void webServerTask(void* parameter) {
     }
 }
 
-// Task: Time updates from ULP to display
 void timeUpdateTask(void* parameter) {
-    const TickType_t xDelay = pdMS_TO_TICKS(1000); // Update every second
+    const TickType_t xDelay = pdMS_TO_TICKS(1000); 
     char timeBuffer[16];
+    bool showColon = true;
 
     while (true) {
+        int gpio_level = rtc_gpio_get_level(GPIO_NUM_32);
+        PowerStatus powerStatus = gpio_level ? MAIN_POWER : BATTERY_POWER;
+
         TimeData currentTime = timeKeeper.getCurrentTime();
 
-        // Format time as HH:MM:SS
-        snprintf(timeBuffer, sizeof(timeBuffer), "%02d:%02d:%02d",
-                 currentTime.hour, currentTime.minute, currentTime.second);
+        if (powerStatus == BATTERY_POWER) {
+            Serial.println("Battery detected - entering deep sleep (ULP will handle time/wake)");
+            timeKeeper.enterDeepSleep();
+        }
 
-        // Send to display queue
+        // Convert to 12-hour format for display
+        uint8_t displayHour = currentTime.hour;
+        if (displayHour == 0) {
+            displayHour = 12; // Midnight
+        } else if (displayHour > 12) {
+            displayHour -= 12; // PM hours
+        }
+
+        // Format time with pulsing colon (alternates every second)
+        const char* separator = showColon ? ":" : " ";
+        snprintf(timeBuffer, sizeof(timeBuffer), "%02d%s%02d",
+                 displayHour, separator, currentTime.minute);
+
+        showColon = !showColon; // Toggle for next iteration
+
         LED_PANEL_REQUEST req;
         req.action = SET_TIME_T;
         strncpy(req.data.text, timeBuffer, sizeof(req.data.text) - 1);
@@ -115,53 +149,70 @@ void timeUpdateTask(void* parameter) {
     }
 }
 
-// Callback for WebServer to send display requests
 void webServerDisplayCallback(LED_PANEL_REQUEST req) {
     xQueueSend(displayQueue, &req, portMAX_DELAY);
 }
 
+
 void setup() {
+#ifdef DEBUG_LEDSTACK
     Serial.begin(115200);
     delay(1000);
 
     Serial.println("========================================");
     Serial.println("ledStack Initializing...");
     Serial.println("========================================");
+#endif
 
-    // Create FreeRTOS communication primitives
     displayQueue = xQueueCreate(10, sizeof(LED_PANEL_REQUEST));
+    storageQueue = xQueueCreate(10, sizeof(LED_PANEL_REQUEST)); 
     nvsMutex = xSemaphoreCreateMutex();
 
-    if (displayQueue == NULL || nvsMutex == NULL) {
+    if (displayQueue == NULL || storageQueue == NULL || nvsMutex == NULL) {
+#ifdef DEBUG_LEDSTACK
         Serial.println("Failed to create queue/mutex");
+#endif
         while (1) { delay(1000); }
     }
 
-    // Initialize components
+#ifdef DEBUG_LEDSTACK
     Serial.println("Initializing Settings Storage...");
+#endif
     settingsStorage.init();
 
+#ifdef DEBUG_LEDSTACK
     Serial.println("Initializing TimeKeeper...");
+#endif
     timeKeeper.init();
 
-    // Power monitoring disabled for testing
-    // if (timeKeeper.wasWokenByULP()) {
-    //     Serial.println("Woken by ULP - Main power restored");
-    // }
+#ifdef DEBUG_LEDSTACK
+    if (timeKeeper.wasWokenByULP()) {
+        Serial.println("Woken by ULP - Main power restored");
+    }
+#endif
 
-    // PowerStatus powerStatus = timeKeeper.getPowerStatus();
-    // if (powerStatus == BATTERY_POWER) {
-    //     Serial.println("Running on battery - entering deep sleep");
-    //     timeKeeper.enterDeepSleep();
-    // }
+    PowerStatus powerStatus = timeKeeper.getPowerStatus();
+#ifdef DEBUG_LEDSTACK
+    Serial.printf("Power status check in main: %d (0=battery, 1=main)\n", powerStatus);
+#endif
+    if (powerStatus == BATTERY_POWER) {
+#ifdef DEBUG_LEDSTACK
+        Serial.println("Running on battery - entering deep sleep");
+#endif
+        timeKeeper.enterDeepSleep();
+    }
 
-    Serial.println("Running on main power (power monitoring disabled for testing)");
-
+#ifdef DEBUG_LEDSTACK
+    Serial.println("Running on main power");
     Serial.println("Initializing Display...");
+#endif
+
     displayManager.init();
 
-    // Load saved settings
+#ifdef DEBUG_LEDSTACK
     Serial.println("Loading saved settings...");
+#endif
+
     DisplaySettings settings;
     if (settingsStorage.loadSettings(settings)) {
         displayManager.setBrightness(settings.brightness);
@@ -169,31 +220,35 @@ void setup() {
         displayManager.setHeaderColor(settings.headerColor);
         displayManager.setTimeColor(settings.timeColor);
         displayManager.setBackgroundColor(settings.bgColor);
+#ifdef DEBUG_LEDSTACK
         Serial.println("Settings loaded and applied");
-    } else {
+#endif
+    } 
+#ifdef DEBUG_LEDSTACK
+    else {
         Serial.println("No saved settings, using defaults");
     }
-
     Serial.println("Initializing WebServer...");
+#endif
+
     webServer.init();
     webServer.setDisplayControlCallback(webServerDisplayCallback);
     webServer.begin();
 
-    // Create FreeRTOS tasks
+#ifdef DEBUG_LEDSTACK
     Serial.println("Creating FreeRTOS tasks...");
+#endif
 
-    // Display task - Core 1, High priority
     xTaskCreatePinnedToCore(
         displayTask,
         "DisplayTask",
-        8192,  // Stack size
+        8192,  
         NULL,
-        2,     // Priority
+        2,  
         &displayTaskHandle,
-        1      // Core 1
+        1     
     );
 
-    // WebServer task - Core 0, Medium priority
     xTaskCreatePinnedToCore(
         webServerTask,
         "WebServerTask",
@@ -201,10 +256,9 @@ void setup() {
         NULL,
         1,
         &webServerTaskHandle,
-        0      // Core 0
+        0     
     );
 
-    // Time update task - Core 1, Medium priority
     xTaskCreatePinnedToCore(
         timeUpdateTask,
         "TimeUpdateTask",
@@ -212,16 +266,27 @@ void setup() {
         NULL,
         1,
         &timeUpdateTaskHandle,
-        1      // Core 1
+        1     
     );
 
+    xTaskCreatePinnedToCore(
+        storageTask,
+        "StorageTask",
+        4096,
+        NULL,
+        1,    
+        &storageTaskHandle,
+        1      
+    );
+
+#ifdef DEBUG_LEDSTACK
     Serial.println("========================================");
     Serial.println("ledStack Initialized Successfully");
     Serial.println("========================================");
     Serial.printf("Free heap: %d bytes\n", ESP.getFreeHeap());
+#endif
 }
 
 void loop() {
-    // Empty - all work done in FreeRTOS tasks
     vTaskDelay(pdMS_TO_TICKS(1000));
 }
