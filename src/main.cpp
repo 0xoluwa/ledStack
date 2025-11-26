@@ -31,8 +31,9 @@ TaskHandle_t timeUpdateTaskHandle = NULL;
 TaskHandle_t storageTaskHandle = NULL;
 
 
-void displayTask(void* parameter) {
-    const TickType_t xDelay = pdMS_TO_TICKS(10); 
+void displayTask(void* parameter) 
+{
+    const TickType_t xDelay = pdMS_TO_TICKS(5); 
 
     while (true) {
         LED_PANEL_REQUEST req;
@@ -48,9 +49,8 @@ void displayTask(void* parameter) {
                              req.data.timeData.hour,
                              req.data.timeData.minute,
                              req.data.timeData.second);
-            }
-
-            xQueueSend(storageQueue, &req, 0); 
+            }else if (xQueueSend(storageQueue, &req, 0) == pdTRUE)
+                Serial.println("Message sent to Storage from Display Manager");
         }
 
         displayManager.update();
@@ -60,7 +60,8 @@ void displayTask(void* parameter) {
     }
 }
 
-void storageTask(void* parameter) {
+void storageTask(void* parameter) 
+{
     const TickType_t xDelay = pdMS_TO_TICKS(1000);
 
     while (true) {
@@ -99,7 +100,8 @@ void storageTask(void* parameter) {
     }
 }
 
-void webServerTask(void* parameter) {
+void webServerTask(void* parameter) 
+{
     const TickType_t xDelay = pdMS_TO_TICKS(2); 
 
     while (true) {
@@ -108,7 +110,8 @@ void webServerTask(void* parameter) {
     }
 }
 
-void timeUpdateTask(void* parameter) {
+void timeUpdateTask(void* parameter) 
+{
     const TickType_t xDelay = pdMS_TO_TICKS(1000); 
     char timeBuffer[16];
     bool showColon = true;
@@ -143,18 +146,23 @@ void timeUpdateTask(void* parameter) {
         req.action = SET_TIME_T;
         strncpy(req.data.text, timeBuffer, sizeof(req.data.text) - 1);
         req.data.text[sizeof(req.data.text) - 1] = '\0';
-        xQueueSend(displayQueue, &req, portMAX_DELAY);
+
+        displayManager.setTimeText(req.data.text);
+        //xQueueSend(displayQueue, &req, portMAX_DELAY);
 
         vTaskDelay(xDelay);
     }
 }
 
-void webServerDisplayCallback(LED_PANEL_REQUEST req) {
+void webServerDisplayCallback(LED_PANEL_REQUEST req) 
+{
+    Serial.println("Web server callback polled");
     xQueueSend(displayQueue, &req, portMAX_DELAY);
 }
 
 
-void setup() {
+void setup() 
+{
 #ifdef DEBUG_LEDSTACK
     Serial.begin(115200);
     delay(1000);
@@ -244,7 +252,7 @@ void setup() {
         "DisplayTask",
         8192,  
         NULL,
-        2,  
+        3,  
         &displayTaskHandle,
         1     
     );
@@ -254,7 +262,7 @@ void setup() {
         "WebServerTask",
         8192,
         NULL,
-        1,
+        10,
         &webServerTaskHandle,
         0     
     );
@@ -264,9 +272,9 @@ void setup() {
         "TimeUpdateTask",
         4096,
         NULL,
-        1,
+        2,
         &timeUpdateTaskHandle,
-        1     
+        0     
     );
 
     xTaskCreatePinnedToCore(
@@ -287,6 +295,7 @@ void setup() {
 #endif
 }
 
-void loop() {
+void loop() 
+{
     vTaskDelay(pdMS_TO_TICKS(1000));
 }

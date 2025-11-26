@@ -2,6 +2,7 @@
 #include <nvs.h>
 #include <nvs_flash.h>
 
+
 void WebServerManager::init() {
     server = nullptr;
     displayControlCallback = nullptr;
@@ -41,6 +42,17 @@ void WebServerManager::begin() {
     });
     server->on("/api/wifi", [this]() {
         if (server->method() == HTTP_POST) apiUpdateWiFiCredentials();
+    });
+
+    // Handle browser icon requests with 204 No Content (prevents 404 spam)
+    server->on("/favicon.ico", HTTP_GET, [this]() {
+        server->send(204);  // 204 No Content
+    });
+    server->on("/apple-touch-icon.png", HTTP_GET, [this]() {
+        server->send(204);  // 204 No Content
+    });
+    server->on("/apple-touch-icon-precomposed.png", HTTP_GET, [this]() {
+        server->send(204);  // 204 No Content
     });
 
     server->onNotFound([this]() { handleNotFound(); });
@@ -422,7 +434,7 @@ String WebServerManager::generateUserControlPage() {
 
     <script>
         // Sync time on page load
-        window.addEventListener('load', function() {
+        function getTime(){
             const now = new Date();
             const hour = now.getHours();
             const minute = now.getMinutes();
@@ -432,6 +444,10 @@ String WebServerManager::generateUserControlPage() {
                 .then(r => r.json())
                 .then(d => console.log('Time synced with device'))
                 .catch(e => console.error('Time sync failed:', e));
+        }
+
+        window.addEventListener('load', function() {
+            getTime();
         });
 
         function showStatus(message, isError) {
@@ -447,6 +463,7 @@ String WebServerManager::generateUserControlPage() {
                 .then(r => r.json())
                 .then(d => showStatus('Display ' + state, false))
                 .catch(e => showStatus('Error: ' + e, true));
+                getTime();
         }
 
         function setHeaderText() {
@@ -455,6 +472,7 @@ String WebServerManager::generateUserControlPage() {
                 .then(r => r.json())
                 .then(d => showStatus('Header updated', false))
                 .catch(e => showStatus('Error: ' + e, true));
+                getTime();
         }
 
         function setHeaderColor() {
@@ -463,6 +481,7 @@ String WebServerManager::generateUserControlPage() {
                 .then(r => r.json())
                 .then(d => showStatus('Header color updated', false))
                 .catch(e => showStatus('Error: ' + e, true));
+                getTime();
         }
 
         function setTimeColor() {
@@ -471,6 +490,7 @@ String WebServerManager::generateUserControlPage() {
                 .then(r => r.json())
                 .then(d => showStatus('Time color updated', false))
                 .catch(e => showStatus('Error: ' + e, true));
+                getTime();
         }
 
         function setBgColor() {
@@ -479,6 +499,7 @@ String WebServerManager::generateUserControlPage() {
                 .then(r => r.json())
                 .then(d => showStatus('Background color updated', false))
                 .catch(e => showStatus('Error: ' + e, true));
+                getTime();
         }
 
         function setBrightness() {
@@ -487,6 +508,7 @@ String WebServerManager::generateUserControlPage() {
                 .then(r => r.json())
                 .then(d => showStatus('Brightness updated', false))
                 .catch(e => showStatus('Error: ' + e, true));
+                getTime();
         }
     </script>
 </body>
@@ -542,6 +564,19 @@ String WebServerManager::generateAdminPage() {
     <div id="status" class="status"></div>
 
     <script>
+        // Sync time on page load
+        window.addEventListener('load', function() {
+            const now = new Date();
+            const hour = now.getHours();
+            const minute = now.getMinutes();
+            const second = now.getSeconds();
+
+            fetch('/api/time/sync?hour=' + hour + '&minute=' + minute + '&second=' + second, { method: 'POST' })
+                .then(r => r.json())
+                .then(d => console.log('Time synced with device'))
+                .catch(e => console.error('Time sync failed:', e));
+        });
+
         function showStatus(message, isError) {
             const status = document.getElementById('status');
             status.textContent = message;

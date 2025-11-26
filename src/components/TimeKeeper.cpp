@@ -44,8 +44,6 @@ void TimeKeeper::init() {
     }
 #endif
 
-    
-
 #ifdef DEBUG_LEDSTACK
     int gpio_level = rtc_gpio_get_level(POWER_SENSE_PIN);
     PowerStatus powerStatus = gpio_level ? MAIN_POWER : BATTERY_POWER;
