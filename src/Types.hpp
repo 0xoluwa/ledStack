@@ -40,3 +40,9 @@ struct DisplaySettings {
     uint32_t bgColor;
     char headerText[128];
 };
+
+
+typedef enum {
+    GET_TIME,
+    SET_TIME
+} time_panel_request;

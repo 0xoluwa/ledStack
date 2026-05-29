@@ -14,9 +14,11 @@ void SettingsStorage::init() {
 
     if (err == ESP_OK) {
         isInitialized = true;
+#ifdef DEBUG_LEDSTACK
         Serial.println("NVS initialized");
     } else {
         Serial.printf("NVS init failed: %s\n", esp_err_to_name(err));
+#endif
     }
 }
 
@@ -54,7 +56,9 @@ bool SettingsStorage::loadSettings(DisplaySettings& settings) {
 
     closeNVS();
 
+#ifdef DEBUG_LEDSTACK
     Serial.println("Settings loaded from NVS");
+#endif
     return true;
 }
 
@@ -95,11 +99,13 @@ bool SettingsStorage::saveSettings(const DisplaySettings& settings) {
 
     closeNVS();
 
+#ifdef DEBUG_LEDSTACK
     if (success) {
         Serial.println("Settings saved to NVS");
     } else {
         Serial.println("Failed to save settings to NVS");
     }
+#endif
 
     return success;
 }
@@ -174,22 +180,28 @@ bool SettingsStorage::clearSettings() {
 
     closeNVS();
 
+#ifdef DEBUG_LEDSTACK
     if (success) {
         Serial.println("Settings cleared from NVS");
     }
+#endif
 
     return success;
 }
 
 bool SettingsStorage::openNVS() {
     if (!isInitialized) {
+#ifdef DEBUG_LEDSTACK
         Serial.println("NVS not initialized");
+#endif
         return false;
     }
 
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &nvsHandle);
     if (err != ESP_OK) {
+#ifdef DEBUG_LEDSTACK
         Serial.printf("Failed to open NVS: %s\n", esp_err_to_name(err));
+#endif
         return false;
     }
 

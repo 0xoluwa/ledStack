@@ -37,6 +37,9 @@ private:
     void apiSyncTime();
     void apiUpdateWiFiCredentials();
 
+    // Response helper - always closes connection
+    void sendResponse(int code, const char* contentType, const String& content);
+
     // Authentication
     bool authenticate();
 

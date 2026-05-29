@@ -51,7 +51,9 @@ void DisplayManager::initHardwareDisplay() {
     virtualDisplay->clearScreen();
     virtualDisplay->invertDisplay(true);
 
+#ifdef DEBUG_LEDSTACK
     Serial.println("Display hardware initialized");
+#endif
 }
 
 void DisplayManager::initLVGL() {
@@ -75,13 +77,17 @@ void DisplayManager::initLVGL() {
     lv_display_set_buffers(lvDisplay, lvBuffer1, lvBuffer2, buf_bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(lvDisplay, lvglFlushCallback);
 
+#ifdef DEBUG_LEDSTACK
     Serial.println("LVGL initialized");
+#endif
 }
 
 void DisplayManager::initUI() {
     ui_init();
     ui_tick();
+#ifdef DEBUG_LEDSTACK
     Serial.println("UI initialized");
+#endif
 }
 
 void DisplayManager::update() {
@@ -94,60 +100,83 @@ void DisplayManager::lvglTick() {
 }
 
 void DisplayManager::setHeaderText(const char* message) {
+#ifdef DEBUG_LEDSTACK
     Serial.printf("DisplayManager: setHeaderText('%s')\n", message);
+#endif
     if (objects.head_lb__main_ctn) {
         lv_label_set_text(objects.head_lb__main_ctn, message);
+#ifdef DEBUG_LEDSTACK
         Serial.println("Header text updated");
     } else {
         Serial.println("ERROR: objects.head_lb__main_ctn is NULL");
+#endif
     }
 }
 
 void DisplayManager::setHeaderColor(uint32_t color) {
+#ifdef DEBUG_LEDSTACK
     Serial.printf("DisplayManager: setHeaderColor(0x%06X)\n", color);
+#endif
     if (objects.head_lb__main_ctn) {
         lv_obj_set_style_text_color(objects.head_lb__main_ctn, lv_color_hex(color), LV_PART_MAIN | LV_STATE_DEFAULT);
+#ifdef DEBUG_LEDSTACK
         Serial.println("Header color updated");
     } else {
         Serial.println("ERROR: objects.head_lb__main_ctn is NULL");
+#endif
     }
 }
 
 void DisplayManager::setTimeText(const char* message) {
     if (objects.time_lb__main_ctn) {
         lv_label_set_text(objects.time_lb__main_ctn, message);
-    } else {
+    } 
+#ifdef DEBUG_LEDSTACK
+    else {
         Serial.println("ERROR: objects.time_lb__main_ctn is NULL");
     }
+#endif
 }
 
 void DisplayManager::setTimeColor(uint32_t color) {
+#ifdef DEBUG_LEDSTACK
     Serial.printf("DisplayManager: setTimeColor(0x%06X)\n", color);
+#endif
     if (objects.time_lb__main_ctn) {
         lv_obj_set_style_text_color(objects.time_lb__main_ctn, lv_color_hex(color), LV_PART_MAIN | LV_STATE_DEFAULT);
+#ifdef DEBUG_LEDSTACK
         Serial.println("Time color updated");
     } else {
         Serial.println("ERROR: objects.time_lb__main_ctn is NULL");
+#endif
     }
 }
 
 void DisplayManager::setBackgroundColor(uint32_t color) {
+#ifdef DEBUG_LEDSTACK
     Serial.printf("DisplayManager: setBackgroundColor(0x%06X)\n", color);
+#endif
     if (objects.main_ctn) {
         lv_obj_set_style_bg_color(objects.main_ctn, lv_color_hex(color), LV_PART_MAIN | LV_STATE_DEFAULT);
+#ifdef DEBUG_LEDSTACK
         Serial.println("Background color updated");
     } else {
         Serial.println("ERROR: objects.main_ctn is NULL");
+#endif
     }
 }
 
 void DisplayManager::setBrightness(uint8_t brightness) {
+#ifdef DEBUG_LEDSTACK
     Serial.printf("DisplayManager: setBrightness(%d)\n", brightness);
+#endif
     if (dmaDisplay) {
         dmaDisplay->setBrightness(brightness);
+#ifdef DEBUG_LEDSTACK
         Serial.println("Brightness updated");
     } else {
         Serial.println("ERROR: dmaDisplay is NULL");
+#endif
     }
 }
 

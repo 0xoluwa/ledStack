@@ -27,11 +27,14 @@
 #define SHIFT_DRIVER HUB75_I2S_CFG::ICN2038S
 
 // Power monitoring
-#define POWER_SENSE_PIN_NUM 32  // GPIO 32 (RTC GPIO) - HIGH = main power, LOW = battery
+//#define POWER_SENSE_PIN_NUM 32  // GPIO 32 (RTC GPIO) - HIGH = main power, LOW = battery
+#define TIME_ENABLE_PIN 33
+#define TIME_CLK_PIN 32
+#define TIME_DATA_PIN 21
 
 // WiFi AP configuration
 #define DEFAULT_AP_SSID "ledStack-AP"
-#define DEFAULT_AP_PASSWORD "12345678"
+#define DEFAULT_AP_PASSWORD "genericpass1"
 
 // Web authentication
 #define WEB_USERNAME "ledStack"
